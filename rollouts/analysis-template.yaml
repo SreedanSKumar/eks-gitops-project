@@ -1,0 +1,35 @@
+# OPTIONAL / ADVANCED — not wired into rollout-canary.yaml or
+# rollout-bluegreen.yaml by default.
+#
+# argoproj/rollouts-demo doesn't expose Prometheus-style metrics
+# (no http_requests_total), so there's nothing meaningful for this
+# AnalysisTemplate to query against out of the box. It's included as
+# a reference for when you swap in your own application image that
+# does emit request metrics — point `address` at the Prometheus
+# service installed by app-monitoring.yaml and adjust `query` to match
+# whatever metric your app actually emits.
+#
+# To use it: add an `analysis: { templates: [{ templateName: success-rate }] }`
+# step into the canary `steps` list, or as `prePromotionAnalysis` in the
+# blue/green strategy.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+spec:
+  args:
+    - name: service-name
+      value: demo-app-canary
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 5
+      successCondition: result[0] >= 0.95
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service-name}}", status!~"5.."}[2m]))
+            /
+            sum(rate(http_requests_total{service="{{args.service-name}}"}[2m]))

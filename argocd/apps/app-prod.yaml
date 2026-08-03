@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-app-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SreedanSKumar/eks-gitops-project
+    targetRevision: main
+    path: k8s/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+
+  # Intentionally NOT automated — prod promotion requires an explicit
+  # `argocd app sync demo-app-prod` (or a click in the UI) after staging
+  # has been validated. Prevents unreviewed changes going straight to prod.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

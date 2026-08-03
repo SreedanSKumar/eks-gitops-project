@@ -1,0 +1,80 @@
+# Canary rollout using the official argoproj/rollouts-demo image.
+# Each color = a distinct "version" you can watch shift live in the
+# `kubectl argo rollouts get rollout demo-app --watch` dashboard.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: demo-app
+  labels:
+    app: demo-app
+spec:
+  replicas: 5
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+        - name: demo-app
+          image: argoproj/rollouts-demo:blue
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /color
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+  strategy:
+    canary:
+      canaryService: demo-app-canary
+      stableService: demo-app-stable
+      steps:
+        - setWeight: 20
+        - pause: { duration: 60 }
+        - setWeight: 40
+        - pause: { duration: 60 }
+        - setWeight: 60
+        - pause: { duration: 60 }
+        - setWeight: 80
+        - pause: { duration: 60 }
+        - setWeight: 100
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-stable
+spec:
+  selector:
+    app: demo-app
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-canary
+spec:
+  selector:
+    app: demo-app
+  ports:
+    - port: 80
+      targetPort: 8080
+
+# ---
+# To trigger a canary rollout, change the image to a new color:
+#   kubectl argo rollouts set image demo-app demo-app=argoproj/rollouts-demo:yellow
+# Watch it progress:
+#   kubectl argo rollouts get rollout demo-app --watch
+# To demo a failed rollout (bad version triggers manual/automatic abort):
+#   kubectl argo rollouts set image demo-app demo-app=argoproj/rollouts-demo:bad-yellow
+#   kubectl argo rollouts abort demo-app
